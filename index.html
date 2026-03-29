@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iTravel OS - Ultimate Edition</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,fill,GRAD@24,400,0,0" />
+
+    <style>
+        [x-cloak] { display: none !important; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #000; color: #fff; }
+        #map { height: 100vh; width: 100vw; z-index: 1; filter: grayscale(0.3) contrast(1.1); }
+        
+        .super-app-sheet {
+            background: rgba(28, 28, 30, 0.95);
+            backdrop-filter: blur(25px);
+            border-top: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .nav-active { color: #0A84FF; transform: scale(1.1); }
+        .ia-card { background: linear-gradient(135deg, #1c1c1e 0%, #2c2c2e 100%); border: 1px solid rgba(255,255,255,0.05); }
+    </style>
+</head>
+<body x-data="itravelCore()" x-init="initMap()">
+
+    <div id="map" class="fixed inset-0"></div>
+
+    <div class="fixed top-8 left-4 right-4 z-[3000] max-w-lg mx-auto">
+        <div class="bg-[#1c1c1e] rounded-2xl shadow-2xl p-2 flex items-center border border-white/10">
+            <span class="material-symbols-rounded text-gray-400 ml-3">search</span>
+            <input type="text" x-model="query" @input.debounce.400ms="searchAPI()" placeholder="Où allons-nous ?" class="bg-transparent flex-1 p-3 outline-none text-sm text-white">
+            <button @click="locateMe()" class="p-2 text-blue-500"><span class="material-symbols-rounded">my_location</span></button>
+        </div>
+
+        <div x-show="results.length > 0" x-cloak class="mt-2 bg-[#1c1c1e]/95 backdrop-blur-xl rounded-2xl overflow-hidden border border-white/10">
+            <template x-for="r in results">
+                <div @click="addStep(r)" class="p-4 hover:bg-white/5 cursor-pointer flex items-center gap-3 border-b border-white/5">
+                    <div class="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-500">
+                        <span class="material-symbols-rounded text-sm">location_on</span>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-sm font-bold" x-text="r.properties.name"></p>
+                        <p class="text-[10px] text-gray-500 uppercase font-black" x-text="r.properties.country"></p>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <div class="fixed inset-x-0 bottom-0 z-[2000] super-app-sheet rounded-t-[40px] px-6 pt-4 pb-32" 
+         :class="sheetOpen ? 'h-[75vh]' : 'h-24'">
+        
+        <div @click="sheetOpen = !sheetOpen" class="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6 cursor-pointer"></div>
+
+        <div x-show="sheetOpen" x-cloak class="h-full overflow-y-auto pb-20 custom-scroll">
+            
+            <div class="flex gap-4 mb-8">
+                <button @click="tab = 'itinerary'" :class="tab === 'itinerary' ? 'bg-blue-600' : 'bg-white/5'" class="flex-1 py-3 rounded-xl font-bold text-xs uppercase transition">Itinéraire</button>
+                <button @click="tab = 'ia'" :class="tab === 'ia' ? 'bg-purple-600' : 'bg-white/5'" class="flex-1 py-3 rounded-xl font-bold text-xs uppercase transition">IA Analysis</button>
+            </div>
+
+            <div x-show="tab === 'itinerary'" class="space-y-4">
+                <template x-for="(s, i) in stops">
+                    <div class="ia-card p-5 rounded-3xl flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-[10px] font-black" x-text="i+1"></div>
+                            <div>
+                                <p class="font-bold text-sm" x-text="s.name"></p>
+                                <p class="text-[10px] text-gray-500" x-text="s.city || 'Escale'"></p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-blue-400 text-xs font-bold" x-text="s.temp ? s.temp + '°C' : ''"></span>
+                            <button @click="removeStop(i)" class="text-red-400/50"><span class="material-symbols-rounded text-sm">delete</span></button>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="stops.length < 2" class="text-center py-10 text-gray-500 text-sm">Ajoutez des lieux pour générer le trajet réel.</div>
+            </div>
+
+            <div x-show="tab === 'ia'" class="space-y-6">
+                <div class="p-6 rounded-[32px] bg-gradient-to-br from-indigo-600 to-purple-700 shadow-xl">
+                    <h3 class="font-black text-xl mb-2">Analyse Mode Rail</h3>
+                    <p class="text-sm opacity-90 leading-relaxed">L'IA compare votre itinéraire routier avec le réseau ferré européen.</p>
+                    <div class="mt-4 bg-black/20 p-4 rounded-2xl border border-white/10">
+                        <p class="text-xs font-bold mb-1 uppercase opacity-60">Estimation Gain de temps</p>
+                        <p class="text-2xl font-black">~2h 15m</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="ia-card p-5 rounded-[32px]">
+                        <span class="material-symbols-rounded text-orange-400 mb-2">local_gas_station</span>
+                        <p class="text-xs text-gray-400">Coût Carburant</p>
+                        <p class="font-bold text-lg" x-text="costEst + ' €'"></p>
+                    </div>
+                    <div class="ia-card p-5 rounded-[32px]">
+                        <span class="material-symbols-rounded text-green-400 mb-2">eco</span>
+                        <p class="text-xs text-gray-400">Empreinte Co2</p>
+                        <p class="font-bold text-lg">12.4 kg</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div x-show="!sheetOpen" class="flex justify-between items-center h-full">
+            <div>
+                <p class="text-xs font-black text-gray-500 uppercase tracking-widest">Trajet Actuel</p>
+                <p class="text-lg font-bold" x-text="dist + ' km • ' + duration"></p>
+            </div>
+            <button @click="sheetOpen = true" class="bg-white text-black px-6 py-2 rounded-full font-bold text-sm">Détails</button>
+        </div>
+    </div>
+
+    <nav class="fixed bottom-8 left-4 right-4 h-18 bg-[#1c1c1e]/80 backdrop-blur-2xl rounded-full border border-white/10 z-[3000] flex items-center justify-around px-4">
+        <button @click="tab = 'itinerary'; sheetOpen = false" class="flex flex-col items-center gap-1 text-gray-500"><span class="material-symbols-rounded">explore</span><span class="text-[8px] font-black uppercase">Carte</span></button>
+        <button @click="tab = 'itinerary'; sheetOpen = true" class="flex flex-col items-center gap-1 text-gray-500"><span class="material-symbols-rounded">route</span><span class="text-[8px] font-black uppercase">Planning</span></button>
+        <div class="w-14 h-14 bg-blue-600 rounded-full -mt-10 flex items-center justify-center shadow-2xl shadow-blue-500/50 border-4 border-[#000]" @click="sheetOpen = true; tab = 'ia'">
+            <span class="material-symbols-rounded text-white">auto_awesome</span>
+        </div>
+        <button class="flex flex-col items-center gap-1 text-gray-500"><span class="material-symbols-rounded">hotel</span><span class="text-[8px] font-black uppercase">Séjours</span></button>
+        <button class="flex flex-col items-center gap-1 text-gray-500"><span class="material-symbols-rounded">person</span><span class="text-[8px] font-black uppercase">Profil</span></button>
+    </nav>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        function itravelCore() {
+            return {
+                sheetOpen: false,
+                tab: 'itinerary',
+                query: '',
+                results: [],
+                stops: [],
+                dist: '0',
+                duration: '0h',
+                costEst: '0',
+                map: null,
+                polyline: null,
+
+                initMap() {
+                    this.map = L.map('map', { zoomControl: false }).setView([48.85, 2.35], 11);
+                    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png').addTo(this.map);
+                },
+
+                async searchAPI() {
+                    if(this.query.length < 3) return this.results = [];
+                    const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(this.query)}&limit=5`);
+                    const data = await res.json();
+                    this.results = data.features;
+                },
+
+                async addStep(r) {
+                    const [lng, lat] = r.geometry.coordinates;
+                    const stop = { name: r.properties.name, city: r.properties.city, lat, lng, temp: null };
+                    
+                    // Fetch météo réelle pour ce point
+                    const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`);
+                    const wData = await w.json();
+                    stop.temp = Math.round(wData.current_weather.temperature);
+                    
+                    this.stops.push(stop);
+                    this.results = [];
+                    this.query = '';
+                    this.calculateRealRoute();
+                },
+
+                async calculateRealRoute() {
+                    if (this.polyline) this.map.removeLayer(this.polyline);
+                    if (this.stops.length < 2) return;
+
+                    const waypoints = this.stops.map(s => `${s.lng},${s.lat}`).join(';');
+                    const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${waypoints}?overview=full&geometries=geojson`);
+                    const data = await res.json();
+                    
+                    if(data.routes && data.routes[0]) {
+                        const route = data.routes[0];
+                        this.dist = (route.distance / 1000).toFixed(1);
+                        this.duration = Math.floor(route.duration / 3600) + 'h ' + Math.floor((route.duration % 3600) / 60) + 'm';
+                        this.costEst = (this.dist * 0.12).toFixed(2); // Calcul essence réel
+                        
+                        const latlngs = route.geometry.coordinates.map(c => [c[1], c[0]]);
+                        this.polyline = L.polyline(latlngs, {color: '#0A84FF', weight: 6, opacity: 0.9}).addTo(this.map);
+                        this.map.fitBounds(this.polyline.getBounds(), {padding: [50, 50]});
+                    }
+                },
+
+                removeStop(i) {
+                    this.stops.splice(i, 1);
+                    this.calculateRealRoute();
+                },
+
+                locateMe() {
+                    navigator.geolocation.getCurrentPosition(p => {
+                        this.addStep({ properties: { name: "Ma Position" }, geometry: { coordinates: [p.coords.longitude, p.coords.latitude] } });
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>
