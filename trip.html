@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>iTravel · Voyage</title>
+  <link rel="icon" type="image/png" href="favicon.svg" />
+  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+<body>
+  <header class="apple-bar">
+    <div class="apple-bar-inner">
+      <div class="brand"><span class="brand-dot"></span><span>iTravel</span></div>
+      <nav class="nav-links">
+        <a href="index.html">Mes voyages</a>
+        <a href="trip.html">Planificateur</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="app-shell" id="trip-root" style="display:none;">
+    <section class="card" style="padding:22px;">
+      <h1 id="trip-title" class="section-title">Voyage</h1>
+      <p class="subtitle">Configure départ, arrivée, mode et lance le calcul réel.</p>
+
+      <div class="grid grid-4" style="margin-top:16px;">
+        <label class="card-flat" style="padding:10px;" id="t-step-1">
+          <div class="muted" style="font-size:12px; margin-bottom:4px;">Date et heure de départ</div>
+          <input id="departure-time" class="input" type="datetime-local" />
+        </label>
+        <label class="card-flat" style="padding:10px;" id="t-step-2">
+          <div class="muted" style="font-size:12px; margin-bottom:4px;">Position départ</div>
+          <input id="departure-label" class="input" placeholder="Ex: Paris" />
+        </label>
+        <label class="card-flat" style="padding:10px;">
+          <div class="muted" style="font-size:12px; margin-bottom:4px;">Position arrivée</div>
+          <input id="arrival-label" class="input" placeholder="Ex: Milan" />
+        </label>
+        <label class="card-flat" style="padding:10px;">
+          <div class="muted" style="font-size:12px; margin-bottom:4px;">Mode</div>
+          <select id="profile" class="input">
+            <option value="driving">Voiture</option>
+            <option value="cycling">Vélo</option>
+            <option value="walking">À pied</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="search-results" class="search-results"></div>
+
+      <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;" id="t-step-3">
+        <button id="use-position" class="btn">Utiliser ma position en départ</button>
+        <button id="btn-route" class="btn btn-primary">Calculer itinéraire réel</button>
+        <button id="btn-plan" class="btn">Générer planning réel</button>
+      </div>
+    </section>
+
+    <section class="layout-2" style="margin-top:16px;">
+      <article class="card" style="padding:16px;">
+        <div id="map"></div>
+        <div class="grid grid-3" style="margin-top:12px;">
+          <div class="card-flat kpi"><p class="label">Distance</p><p class="value" id="kpi-distance">--</p></div>
+          <div class="card-flat kpi"><p class="label">Durée</p><p class="value" id="kpi-duration">--</p></div>
+          <div class="card-flat kpi"><p class="label">Coût carburant</p><p class="value" id="kpi-cost">--</p></div>
+        </div>
+        <div class="card-flat" style="margin-top:12px; padding:12px;">
+          <strong>Météo d'arrivée</strong>
+          <div id="weather" class="muted" style="margin-top:6px;">--</div>
+        </div>
+        <div class="card-flat" style="margin-top:12px; padding:12px;">
+          <strong>Train (si disponible)</strong>
+          <div id="train-info" class="muted" style="margin-top:6px;">--</div>
+        </div>
+        <div class="card-flat" style="margin-top:12px; padding:12px;">
+          <strong>Embouteillage estimé</strong>
+          <div id="traffic-info" class="muted" style="margin-top:6px;">--</div>
+        </div>
+      </article>
+
+      <aside class="grid">
+        <article class="card" style="padding:16px;" id="t-step-4">
+          <h3 style="margin:0;">Assistant iTravel</h3>
+          <p class="subtitle" style="font-size:13px;">Actions: calcule, planning, meteo, train, ajoute 14:30 musée.</p>
+          <div id="assistant-messages" class="assistant-messages" style="margin-top:10px;"></div>
+          <div style="display:flex; gap:8px; margin-top:10px;">
+            <input id="assistant-input" class="input" placeholder="Écris une action" />
+            <button id="assistant-send" class="btn btn-primary">Exécuter</button>
+          </div>
+        </article>
+
+        <article class="card" style="padding:16px;">
+          <h3 style="margin:0;">Planning étape par étape</h3>
+          <div class="progress" style="margin-top:8px;"><span id="tutorial-progress" style="width:0%"></span></div>
+          <div id="itinerary" class="list" style="margin-top:10px;"></div>
+          <div style="display:flex; gap:8px; margin-top:10px;">
+            <input id="activity-input" class="input" placeholder="15:00 visite cathédrale" />
+            <button id="activity-add" class="btn">Ajouter</button>
+          </div>
+        </article>
+
+        <article class="card" style="padding:16px;">
+          <h3 style="margin:0;">Suggestions OSM proches arrivée</h3>
+          <div id="suggestions" class="list" style="margin-top:10px;"></div>
+        </article>
+      </aside>
+    </section>
+  </main>
+
+  <div id="tutorial-box" class="tutorial-box" style="display:none;"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="assets/trip.js"></script>
+</body>
+</html>
