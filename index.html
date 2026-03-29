@@ -4,23 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>iTravel Pro</title>
+<title>iTravel Stable</title>
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-body { margin:0; font-family:-apple-system; background:#fff;}
+body { margin:0; font-family:-apple-system; }
 #map { height:100vh; }
-
-.blur {
-    background: rgba(255,255,255,0.85);
+.panel {
+    background: rgba(255,255,255,0.9);
     backdrop-filter: blur(20px);
 }
-
-button { transition:0.15s; }
-button:active { transform:scale(0.95); }
 </style>
 </head>
 
@@ -28,24 +24,17 @@ button:active { transform:scale(0.95); }
 
 <div id="map"></div>
 
-<!-- TOP SEARCH -->
+<!-- SEARCH -->
 <div class="absolute top-4 left-0 right-0 px-4 z-50">
-<div class="blur rounded-2xl p-3 shadow max-w-md mx-auto">
+<div class="panel rounded-xl p-3 max-w-md mx-auto">
 
-<input x-model="search" @input.debounce.300ms="searchPlaces()"
-placeholder="Rechercher..."
-class="w-full bg-transparent outline-none text-lg"/>
+<input x-model="search" @input.debounce.400ms="searchPlaces()"
+placeholder="Rechercher un lieu"
+class="w-full outline-none text-lg"/>
 
-<div class="flex gap-2 mt-2 overflow-x-auto text-sm">
-<button @click="quick('restaurant')" class="px-3 py-1 bg-gray-100 rounded-full">Restaurants</button>
-<button @click="quick('hotel')" class="px-3 py-1 bg-gray-100 rounded-full">Hôtels</button>
-<button @click="quick('museum')" class="px-3 py-1 bg-gray-100 rounded-full">Musées</button>
-<button @click="quick('supermarket')" class="px-3 py-1 bg-gray-100 rounded-full">Courses</button>
-</div>
-
-<div x-show="results.length" class="mt-2">
+<div x-show="results.length" class="mt-2 max-h-40 overflow-auto">
 <template x-for="r in results">
-<div @click="addPlace(r)" class="p-2 hover:bg-gray-100 rounded cursor-pointer">
+<div @click="addPlace(r)" class="p-2 hover:bg-gray-100 cursor-pointer text-sm">
 <span x-text="r.display_name"></span>
 </div>
 </template>
@@ -55,67 +44,26 @@ class="w-full bg-transparent outline-none text-lg"/>
 </div>
 
 <!-- PANEL -->
-<div class="absolute bottom-0 left-0 right-0 blur rounded-t-3xl p-4 max-h-[75vh] overflow-auto">
+<div class="absolute bottom-0 left-0 right-0 panel p-4 max-h-[60vh] overflow-auto">
 
-<h2 class="text-xl font-bold">Carnet</h2>
+<h2 class="font-bold text-lg">Carnet</h2>
 
-<!-- STOPS -->
 <template x-for="(s,i) in stops">
-<div class="mt-3 p-3 bg-white rounded-xl shadow flex justify-between">
+<div class="flex justify-between mt-2 bg-white p-2 rounded">
 
 <div>
-<p class="font-semibold" x-text="s.name"></p>
-<p class="text-xs text-gray-500">
-<span x-text="s.weather"></span> •
-<span x-text="s.time"></span>
-</p>
+<p x-text="s.name"></p>
+<p class="text-xs text-gray-500" x-text="s.weather"></p>
 </div>
 
-<button @click="remove(i)">Supprimer</button>
+<button @click="remove(i)">X</button>
 
 </div>
 </template>
 
-<!-- ROUTE -->
-<button x-show="stops.length>1"
-@click="route()"
-class="w-full mt-4 bg-blue-600 text-white p-3 rounded-xl">
-Calculer itinéraire
-</button>
-
-<!-- EXPENSES -->
-<div class="mt-6">
-<h3 class="font-bold">Portefeuille</h3>
-
-<div class="flex gap-2 mt-2">
-<input x-model="expenseName" placeholder="Nom" class="border p-2 rounded w-1/2">
-<input x-model="expenseAmount" placeholder="€" type="number" class="border p-2 rounded w-1/2">
-</div>
-
-<button @click="addExpense()" class="mt-2 bg-black text-white px-3 py-2 rounded">
-Ajouter
-</button>
-
-<template x-for="e in expenses">
-<div class="flex justify-between text-sm mt-2">
-<span x-text="e.name"></span>
-<span x-text="e.amount + '€'"></span>
-</div>
-</template>
-
-<p class="font-bold mt-2">
-Total : <span x-text="totalExpenses()"></span> €
-</p>
-</div>
-
-<!-- NOTES -->
-<textarea x-model="notes"
-placeholder="Notes..."
-class="w-full mt-4 p-3 bg-gray-100 rounded-xl"></textarea>
-
-<!-- NOTIFICATION -->
-<button @click="scheduleNotif()" class="mt-3 w-full bg-green-600 text-white p-2 rounded">
-Créer rappel (1 min)
+<button x-show="stops.length>1" @click="route()"
+class="w-full mt-3 bg-blue-600 text-white p-2 rounded">
+Tracer itinéraire
 </button>
 
 </div>
@@ -130,13 +78,8 @@ map:null,
 search:'',
 results:[],
 stops:[],
+markers:[],
 poly:null,
-
-expenses:[],
-expenseName:'',
-expenseAmount:'',
-
-notes:'',
 
 init(){
 
@@ -145,121 +88,134 @@ this.map = L.map('map').setView([50.85,4.35],6);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
 .addTo(this.map);
 
-// load
-this.stops = JSON.parse(localStorage.getItem('stops')||'[]');
-this.expenses = JSON.parse(localStorage.getItem('expenses')||'[]');
-this.notes = localStorage.getItem('notes')||'';
+// load safe
+try {
+this.stops = JSON.parse(localStorage.getItem('stops')) || [];
+} catch {
+this.stops = [];
+}
 
+// restore markers
 this.stops.forEach(s=>{
-L.marker([s.lat,s.lng]).addTo(this.map);
+this.addMarker(s.lat,s.lng);
 });
 
 },
 
 async searchPlaces(){
 
-if(this.search.length<3){this.results=[];return;}
+if(this.search.length < 3){
+this.results = [];
+return;
+}
 
-let r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${this.search}`);
-this.results = await r.json();
+try {
+let r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(this.search)}`);
+let data = await r.json();
 
-},
+this.results = data.slice(0,5);
+} catch {
+this.results = [];
+}
 
-quick(q){
-this.search=q;
-this.searchPlaces();
 },
 
 async addPlace(p){
 
-let lat = p.lat;
-let lng = p.lon;
+if(!p.lat || !p.lon) return;
 
-let weather = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`);
-let w = await weather.json();
+let lat = parseFloat(p.lat);
+let lng = parseFloat(p.lon);
+
+let weatherText = '';
+
+try {
+let w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`);
+let data = await w.json();
+
+if(data.current_weather){
+weatherText = Math.round(data.current_weather.temperature) + "°C";
+}
+} catch {
+weatherText = '';
+}
 
 let stop = {
-name:p.display_name,
+name: p.display_name,
 lat,
 lng,
-weather: Math.round(w.current_weather.temperature)+"°C",
-time:'--'
+weather: weatherText
 };
 
 this.stops.push(stop);
+this.save();
 
-localStorage.setItem('stops',JSON.stringify(this.stops));
-
-L.marker([lat,lng]).addTo(this.map);
+this.addMarker(lat,lng);
 
 this.map.flyTo([lat,lng],12);
 
-this.results=[];
-this.search='';
+this.results = [];
+this.search = '';
 
 },
 
+addMarker(lat,lng){
+let marker = L.marker([lat,lng]).addTo(this.map);
+this.markers.push(marker);
+},
+
 remove(i){
+
 this.stops.splice(i,1);
-localStorage.setItem('stops',JSON.stringify(this.stops));
+this.save();
+
+// reset map
+this.markers.forEach(m=>this.map.removeLayer(m));
+this.markers = [];
+
+this.stops.forEach(s=>{
+this.addMarker(s.lat,s.lng);
+});
+
+if(this.poly){
+this.map.removeLayer(this.poly);
+this.poly = null;
+}
+
+},
+
+save(){
+localStorage.setItem('stops', JSON.stringify(this.stops));
 },
 
 async route(){
 
-if(this.poly) this.map.removeLayer(this.poly);
+if(this.stops.length < 2) return;
+
+if(this.poly){
+this.map.removeLayer(this.poly);
+}
+
+try {
 
 let coords = this.stops.map(s=>`${s.lng},${s.lat}`).join(';');
 
 let r = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
 let data = await r.json();
 
-let route = data.routes[0];
+if(!data.routes || !data.routes[0]) return;
 
-let latlngs = route.geometry.coordinates.map(c=>[c[1],c[0]]);
+let latlngs = data.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
 
 this.poly = L.polyline(latlngs,{weight:5}).addTo(this.map);
 
 this.map.fitBounds(this.poly.getBounds());
 
-// temps réel
-let total = route.duration;
-this.stops.forEach((s,i)=>{
-s.time = Math.round(total/60)+" min total";
-});
-
-},
-
-addExpense(){
-if(!this.expenseName || !this.expenseAmount) return;
-
-this.expenses.push({
-name:this.expenseName,
-amount:parseFloat(this.expenseAmount)
-});
-
-localStorage.setItem('expenses',JSON.stringify(this.expenses));
-
-this.expenseName='';
-this.expenseAmount='';
-},
-
-totalExpenses(){
-return this.expenses.reduce((a,b)=>a+b.amount,0);
-},
-
-scheduleNotif(){
-
-if(Notification.permission !== "granted"){
-Notification.requestPermission();
+} catch {
+console.log("route error");
 }
 
-setTimeout(()=>{
-new Notification("Départ",{
-body:"C'est l'heure de partir"
-});
-},60000);
-
-},
+}
 
 }
 }
