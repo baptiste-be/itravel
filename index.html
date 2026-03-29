@@ -1,374 +1,266 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>iTravel</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <style>
-    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif; background:#f2f4f8; color:#0f172a; }
-    .glass { background:rgba(255,255,255,.62); border:1px solid rgba(255,255,255,.8); backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%); box-shadow:0 18px 40px rgba(15,23,42,.12); }
-    .glass-soft { background:rgba(255,255,255,.52); border:1px solid rgba(255,255,255,.75); backdrop-filter:blur(14px); }
-    .app-bg { min-height:100vh; background:radial-gradient(1200px 400px at -10% -10%,rgba(59,130,246,.20),transparent),radial-gradient(1000px 400px at 110% -5%,rgba(168,85,247,.15),transparent),#f4f6fa; }
-    #map { width:100%; height:100%; }
-    .map-wrap { height: 350px; border-radius:22px; overflow:hidden; border:1px solid rgba(255,255,255,.8); }
-    .tutorial-highlight { position:relative; z-index:70; box-shadow:0 0 0 4px rgba(37,99,235,.35); border-radius:14px; transition: all .2s ease; }
-    .chip { border-radius:999px; padding:5px 11px; font-size:12px; font-weight:600; background:rgba(15,23,42,.08); }
-    @media (min-width:1024px){ .map-wrap{height:460px;} }
-  </style>
-</head>
-<body x-data="app()" x-init="init()" class="app-bg p-4 lg:p-8">
-  <div class="max-w-7xl mx-auto space-y-5">
-    <header class="glass rounded-3xl p-5 lg:p-7 flex flex-col lg:flex-row gap-4 justify-between">
-      <div>
-        <p class="text-xs font-semibold tracking-[.18em] text-slate-500 uppercase">iTravel</p>
-        <h1 class="text-2xl lg:text-4xl font-semibold">Ton agent de voyage intelligent</h1>
-        <p class="text-slate-600 mt-2">Vrai trajet, vrai planning, vraies suggestions basées sur ta route et OpenStreetMap.</p>
-      </div>
-      <button @click="startTutorial()" class="self-start rounded-xl px-4 py-2 bg-white/80 font-semibold text-sm">Revoir le tuto</button>
-    </header>
-
-    <section x-show="screen === 'menu'" x-transition class="glass rounded-3xl p-5 lg:p-8">
-      <div class="flex items-center justify-between flex-wrap gap-3">
-        <h2 id="step-create" :class="isTutorialTarget('step-create') ? 'tutorial-highlight' : ''" class="text-xl lg:text-2xl font-semibold">Mes voyages</h2>
-        <div class="flex gap-2">
-          <input x-model="newTripName" placeholder="Nom du voyage" class="rounded-xl px-3 py-2 border border-white/70 bg-white/70 text-sm" />
-          <button @click="createTravel()" class="rounded-xl px-4 py-2 bg-slate-900 text-white text-sm font-semibold">+ Créer un voyage</button>
-        </div>
-      </div>
-
-      <div class="mt-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <template x-for="trip in travels" :key="trip.id">
-          <article class="glass-soft rounded-2xl p-4 flex flex-col gap-3">
-            <h3 class="font-semibold" x-text="trip.name"></h3>
-            <p class="text-xs text-slate-500">Créé le <span x-text="formatDate(trip.createdAt)"></span></p>
-            <button @click="selectTravel(trip.id)" class="rounded-xl px-3 py-2 bg-white/80 text-sm font-semibold">Ouvrir</button>
-          </article>
-        </template>
-      </div>
-      <p x-show="!travels.length" class="mt-5 text-slate-500">Crée ton premier voyage pour commencer.</p>
-    </section>
-
-    <section x-show="screen==='trip' && currentTravel" x-transition class="space-y-5">
-      <article class="glass rounded-3xl p-5 lg:p-7">
-        <div class="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <p class="text-xs uppercase tracking-[.18em] text-slate-500">Voyage sélectionné</p>
-            <h2 class="text-2xl font-semibold" x-text="currentTravel?.name"></h2>
-          </div>
-          <button @click="screen='menu'" class="rounded-xl px-3 py-2 bg-white/75 text-sm">← Retour menu</button>
-        </div>
-
-        <div class="grid lg:grid-cols-4 gap-3 mt-5">
-          <label id="step-depart" :class="isTutorialTarget('step-depart') ? 'tutorial-highlight' : ''" class="glass-soft rounded-2xl p-3 flex flex-col gap-1">
-            <span class="text-[11px] uppercase tracking-[.16em] text-slate-500">Départ date/heure</span>
-            <input type="datetime-local" x-model="tripForm.departDateTime" class="rounded-lg p-2 bg-white/80 border border-white/70" />
-          </label>
-          <label class="glass-soft rounded-2xl p-3 flex flex-col gap-1">
-            <span class="text-[11px] uppercase tracking-[.16em] text-slate-500">Position départ</span>
-            <input type="text" x-model="tripForm.depart" @input.debounce.400ms="searchPlaces('depart')" placeholder="Paris" class="rounded-lg p-2 bg-white/80 border border-white/70" />
-          </label>
-          <label class="glass-soft rounded-2xl p-3 flex flex-col gap-1">
-            <span class="text-[11px] uppercase tracking-[.16em] text-slate-500">Position arrivée</span>
-            <input type="text" x-model="tripForm.arrivee" @input.debounce.400ms="searchPlaces('arrivee')" placeholder="Rome" class="rounded-lg p-2 bg-white/80 border border-white/70" />
-          </label>
-          <div class="glass-soft rounded-2xl p-3 flex flex-col gap-2">
-            <span class="text-[11px] uppercase tracking-[.16em] text-slate-500">Mode transport</span>
-            <select x-model="tripForm.profile" class="rounded-lg p-2 bg-white/80 border border-white/70">
-              <option value="driving">Voiture</option>
-              <option value="cycling">Vélo</option>
-              <option value="walking">À pied</option>
-            </select>
-            <button @click="useMyLocationAsDepart()" class="rounded-lg px-2 py-1 bg-white/80 text-xs">Utiliser ma position</button>
-          </div>
-        </div>
-
-        <div class="mt-3 flex flex-wrap gap-2" x-show="search.results.length">
-          <template x-for="item in search.results" :key="item.place_id">
-            <button @click="applyPlace(item)" class="chip hover:bg-slate-900 hover:text-white" x-text="item.display_name"></button>
-          </template>
-        </div>
-
-        <div class="mt-4 flex flex-wrap gap-3">
-          <button id="step-route" :class="isTutorialTarget('step-route') ? 'tutorial-highlight' : ''" @click="computeRoute()" class="rounded-2xl px-4 py-2 bg-slate-900 text-white font-semibold">Calculer l'itinéraire</button>
-          <button @click="buildRealPlanning()" class="rounded-2xl px-4 py-2 bg-white/80 font-semibold">Construire le planning réel</button>
-        </div>
-      </article>
-
-      <div class="grid xl:grid-cols-3 gap-5">
-        <article class="xl:col-span-2 glass rounded-3xl p-4 lg:p-6">
-          <h3 class="font-semibold text-lg">Carte OpenStreetMap</h3>
-          <div class="map-wrap mt-3"><div id="map"></div></div>
-          <div class="grid sm:grid-cols-3 gap-3 mt-4">
-            <div class="glass-soft rounded-xl p-3"><p class="text-xs text-slate-500 uppercase">Distance</p><p class="text-xl font-semibold" x-text="route.distanceText"></p></div>
-            <div class="glass-soft rounded-xl p-3"><p class="text-xs text-slate-500 uppercase">Durée</p><p class="text-xl font-semibold" x-text="route.durationText"></p></div>
-            <div class="glass-soft rounded-xl p-3"><p class="text-xs text-slate-500 uppercase">Coût estimé</p><p class="text-xl font-semibold" x-text="route.costText"></p></div>
-          </div>
-          <div class="mt-3 text-sm text-slate-600" x-show="transportComparison.length">
-            <p class="font-semibold">Comparaison réelle des modes:</p>
-            <ul class="list-disc ml-5">
-              <template x-for="opt in transportComparison" :key="opt.mode"><li x-text="`${opt.label}: ${opt.distance} / ${opt.duration}`"></li></template>
-            </ul>
-          </div>
-        </article>
-
-        <aside class="space-y-5">
-          <article id="step-assistant" :class="isTutorialTarget('step-assistant') ? 'tutorial-highlight' : ''" class="glass rounded-3xl p-4 lg:p-5">
-            <h3 class="font-semibold">Assistant iATravel (actions réelles)</h3>
-            <p class="text-xs text-slate-500 mt-1">Exemples: “calcule itinéraire”, “ajoute activité 14:00 musée”, “utilise ma position”, “planning réel”.</p>
-            <div class="space-y-2 max-h-56 overflow-auto mt-3 pr-1">
-              <template x-for="(m,i) in chat" :key="i">
-                <div class="rounded-xl p-2 text-sm" :class="m.role==='user' ? 'bg-slate-900 text-white ml-6' : 'glass-soft mr-6'" x-text="m.content"></div>
-              </template>
-            </div>
-            <div class="mt-3 flex gap-2">
-              <input x-model="chatDraft" @keydown.enter.prevent="assistantRun()" class="w-full rounded-xl px-3 py-2 bg-white/80 border border-white/70 text-sm" placeholder="Tape une action..." />
-              <button @click="assistantRun()" class="rounded-xl px-3 py-2 bg-slate-900 text-white text-sm">Exécuter</button>
-            </div>
-          </article>
-
-          <article class="glass rounded-3xl p-4 lg:p-5">
-            <h3 class="font-semibold">Planning réel du voyage</h3>
-            <ul class="mt-3 space-y-2 text-sm">
-              <template x-for="(event,idx) in itinerary" :key="idx">
-                <li class="glass-soft rounded-xl p-2"><p class="font-medium" x-text="event.time"></p><p x-text="event.task"></p></li>
-              </template>
-            </ul>
-            <div class="mt-3 flex gap-2">
-              <input x-model="activityInput" placeholder="16:30 visite quartier" class="w-full rounded-lg px-3 py-2 bg-white/80 border border-white/70 text-sm" />
-              <button @click="addActivityFromInput()" class="rounded-lg px-3 py-2 bg-white/80 text-sm">Ajouter</button>
-            </div>
-          </article>
-
-          <article class="glass rounded-3xl p-4 lg:p-5">
-            <h3 class="font-semibold">Suggestions proches de l’arrivée (OSM)</h3>
-            <ul class="mt-3 text-sm space-y-2">
-              <template x-for="(s,idx) in realSuggestions" :key="idx"><li class="glass-soft rounded-xl p-2" x-text="s"></li></template>
-            </ul>
-          </article>
-        </aside>
-      </div>
-    </section>
-  </div>
-
-  <div x-show="tutorial.active" x-transition class="fixed inset-0 bg-slate-900/35 z-60">
-    <div class="absolute" :style="tutorialStyle()">
-      <div class="glass rounded-2xl p-4 max-w-xs text-sm">
-        <p class="font-semibold" x-text="tutorialCurrent?.title"></p>
-        <p class="mt-1" x-text="tutorialCurrent?.text"></p>
-        <div class="mt-3 flex justify-between">
-          <button @click="skipTutorial()" class="text-xs px-2 py-1 rounded bg-white/80">Passer</button>
-          <button @click="nextTutorial()" class="text-xs px-2 py-1 rounded bg-slate-900 text-white">Suivant →</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    function app(){
-      return {
-        screen:'menu', map:null, routeLine:null, markers:{depart:null,arrivee:null,me:null},
-        travels:[], selectedTravelId:null, newTripName:'',
-        tripForm:{departDateTime:'',depart:'',arrivee:'',profile:'driving'},
-        points:{depart:null,arrivee:null},
-        search:{target:null,results:[]},
-        route:{distanceText:'--',durationText:'--',costText:'--',seconds:null},
-        transportComparison:[], itinerary:[], activityInput:'', realSuggestions:[],
-        chat:[{role:'assistant', content:'Je suis prêt. Écris une action et je l’exécute.'}], chatDraft:'',
-        tutorial:{active:false,index:0,steps:[
-          {target:'step-create', title:'1. Crée un voyage', text:'Commence ici, puis ouvre ton voyage.'},
-          {target:'step-depart', title:'2. Définis ton départ', text:'Date/heure + adresses de départ/arrivée.'},
-          {target:'step-route', title:'3. Calcule la route', text:'Itinéraire réel depuis OSRM + coût estimé.'},
-          {target:'step-assistant', title:'4. Assistant action', text:'Donne une action claire, il agit tout de suite.'}
-        ]},
-
-        get tutorialCurrentStep(){ return this.tutorial.steps[this.tutorial.index] || null; },
-        get currentTravel(){ return this.travels.find(t=>t.id===this.selectedTravelId) || null; },
-
-        init(){
-          this.load();
-          this.map = L.map('map').setView([48.8566,2.3522],5);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(this.map);
-          if(!this.travels.length) this.startTutorial();
-        },
-
-        load(){
-          try {
-            const data = JSON.parse(localStorage.getItem('itravel_v2'));
-            if(data?.travels) this.travels = data.travels;
-          } catch {}
-        },
-        save(){ localStorage.setItem('itravel_v2', JSON.stringify({travels:this.travels})); },
-
-        formatDate(iso){ return new Date(iso).toLocaleString('fr-FR'); },
-
-        createTravel(){
-          const name = this.newTripName.trim();
-          if(!name) return;
-          const trip = {id:Date.now(), name, createdAt:new Date().toISOString()};
-          this.travels.unshift(trip); this.newTripName=''; this.save();
-          this.selectTravel(trip.id);
-        },
-
-        selectTravel(id){ this.selectedTravelId=id; this.screen='trip'; setTimeout(()=>this.map.invalidateSize(),120); },
-
-        async searchPlaces(target){
-          this.search.target = target;
-          const q = this.tripForm[target];
-          if(!q || q.length < 3){ this.search.results=[]; return; }
-          try {
-            const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`);
-            const data = await r.json(); this.search.results = data.slice(0,6);
-          } catch { this.search.results=[]; }
-        },
-
-        applyPlace(place){
-          const t=this.search.target; if(!t) return;
-          const lat=parseFloat(place.lat), lon=parseFloat(place.lon);
-          this.tripForm[t]=place.display_name; this.points[t]={lat,lon,label:place.display_name}; this.search.results=[];
-          if(this.markers[t]) this.map.removeLayer(this.markers[t]);
-          this.markers[t]=L.marker([lat,lon]).addTo(this.map).bindPopup(t==='depart'?'Départ':'Arrivée');
-          this.map.flyTo([lat,lon],10);
-        },
-
-        async computeRoute(){
-          if(!this.points.depart || !this.points.arrivee) return this.pushAssistant('Ajoute un départ et une arrivée valides.');
-          await this.computeMainRoute();
-          await this.computeComparisons();
-          await this.fetchNearbySuggestions();
-          this.scheduleDepartureNotification();
-        },
-
-        async computeMainRoute(){
-          const c=`${this.points.depart.lon},${this.points.depart.lat};${this.points.arrivee.lon},${this.points.arrivee.lat}`;
-          const profile=this.tripForm.profile;
-          const r=await fetch(`https://router.project-osrm.org/route/v1/${profile}/${c}?overview=full&geometries=geojson`);
-          const data=await r.json(); const route=data?.routes?.[0]; if(!route) return;
-          const latlngs=route.geometry.coordinates.map(p=>[p[1],p[0]]);
-          if(this.routeLine) this.map.removeLayer(this.routeLine);
-          this.routeLine=L.polyline(latlngs,{color:'#0f172a',weight:5}).addTo(this.map);
-          this.map.fitBounds(this.routeLine.getBounds(),{padding:[30,30]});
-          const km=route.distance/1000, min=route.duration/60;
-          this.route = {
-            distanceText:`${km.toFixed(1)} km`,
-            durationText:`${Math.round(min)} min`,
-            costText: profile==='driving' ? `${(km*0.11).toFixed(2)} € essence` : `${(km*0.02).toFixed(2)} € coût énergie`,
-            seconds: route.duration
-          };
-          this.pushAssistant(`Itinéraire ${profile} calculé: ${this.route.distanceText}, ${this.route.durationText}.`);
-        },
-
-        async computeComparisons(){
-          const modes=[{mode:'driving',label:'Voiture'},{mode:'cycling',label:'Vélo'},{mode:'walking',label:'À pied'}];
-          const c=`${this.points.depart.lon},${this.points.depart.lat};${this.points.arrivee.lon},${this.points.arrivee.lat}`;
-          const out=[];
-          for (const m of modes){
-            try {
-              const r=await fetch(`https://router.project-osrm.org/route/v1/${m.mode}/${c}?overview=false`);
-              const d=await r.json(); const rt=d?.routes?.[0]; if(!rt) continue;
-              out.push({mode:m.mode,label:m.label,distance:`${(rt.distance/1000).toFixed(1)} km`,duration:`${Math.round(rt.duration/60)} min`});
-            } catch {}
-          }
-          this.transportComparison = out;
-        },
-
-        async fetchNearbySuggestions(){
-          if(!this.points.arrivee) return;
-          const {lat,lon} = this.points.arrivee;
-          const query = `[out:json][timeout:20];(node(around:2200,${lat},${lon})[amenity=restaurant];node(around:2200,${lat},${lon})[tourism=hotel];);out body 12;`;
-          try {
-            const res = await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:query});
-            const data = await res.json();
-            this.realSuggestions = (data.elements || []).slice(0,6).map(e => {
-              const n = e.tags?.name || 'Lieu sans nom';
-              if(e.tags?.amenity === 'restaurant') return `🍽️ ${n} (restaurant)`;
-              if(e.tags?.tourism === 'hotel') return `🏨 ${n} (hôtel)`;
-              return n;
-            });
-          } catch { this.realSuggestions = ['Impossible de charger les suggestions OSM actuellement.']; }
-        },
-
-        buildRealPlanning(){
-          const dt = this.tripForm.departDateTime ? new Date(this.tripForm.departDateTime) : new Date();
-          const events=[];
-          events.push({time:this.hhmm(dt), task:`Départ depuis ${this.tripForm.depart || 'départ non défini'}`});
-          if(this.route.seconds){
-            const mid = new Date(dt.getTime() + (this.route.seconds*1000)/2);
-            const end = new Date(dt.getTime() + this.route.seconds*1000);
-            events.push({time:this.hhmm(mid), task:'Pause recommandée à mi-parcours'});
-            events.push({time:this.hhmm(end), task:`Arrivée à ${this.tripForm.arrivee || 'destination'}`});
-          }
-          if(this.realSuggestions.length){ events.push({time:'Après arrivée', task:`Option: ${this.realSuggestions[0]}`}); }
-          this.itinerary = events;
-          this.pushAssistant('Planning réel généré avec l’heure de départ et la durée de route.');
-        },
-
-        hhmm(d){ return d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); },
-
-        addActivityFromInput(){
-          const t = this.activityInput.trim(); if(!t) return;
-          const m = t.match(/^(\d{1,2}:\d{2})\s+(.+)$/);
-          if(!m) return this.pushAssistant('Format activité: 16:30 visite musée');
-          this.itinerary.push({time:m[1], task:m[2]});
-          this.activityInput='';
-          this.pushAssistant('Activité ajoutée au planning.');
-        },
-
-        async useMyLocationAsDepart(){
-          if(!navigator.geolocation) return;
-          navigator.geolocation.getCurrentPosition(async (p)=>{
-            const {latitude,longitude}=p.coords;
-            this.points.depart={lat:latitude,lon:longitude,label:'Ma position'};
-            this.tripForm.depart='Ma position GPS';
-            if(this.markers.depart) this.map.removeLayer(this.markers.depart);
-            this.markers.depart=L.marker([latitude,longitude]).addTo(this.map).bindPopup('Départ: ma position');
-            this.map.flyTo([latitude,longitude],11);
-            this.pushAssistant('Position actuelle définie comme départ.');
-          });
-        },
-
-        scheduleDepartureNotification(){
-          if(!this.tripForm.departDateTime || typeof Notification === 'undefined') return;
-          const ts = new Date(this.tripForm.departDateTime).getTime(); const diff=ts-Date.now();
-          if(diff<=0 || diff>6*60*60*1000) return;
-          if(Notification.permission==='granted') setTimeout(()=>new Notification('iTravel',{body:'Départ maintenant'}), diff);
-          else if(Notification.permission!=='denied') Notification.requestPermission();
-        },
-
-        assistantRun(){
-          const text=this.chatDraft.trim(); if(!text) return;
-          this.chat.push({role:'user',content:text}); this.chatDraft='';
-          const q=text.toLowerCase();
-          if(q.includes('calcule') || q.includes('itinéraire')) return this.computeRoute();
-          if(q.includes('planning')) return this.buildRealPlanning();
-          if(q.includes('utilise ma position') || q.includes('ma position')) return this.useMyLocationAsDepart();
-          if(q.includes('ajoute activité')){
-            const str=text.replace(/ajoute activité/i,'').trim();
-            this.activityInput=str; return this.addActivityFromInput();
-          }
-          this.pushAssistant('Action non reconnue. Essaie: calcule itinéraire / planning réel / ajoute activité 15:00 ...');
-        },
-
-        pushAssistant(msg){ this.chat.push({role:'assistant',content:msg}); },
-
-        startTutorial(){ this.tutorial.active=true; this.tutorial.index=0; },
-        nextTutorial(){ if(this.tutorial.index>=this.tutorial.steps.length-1) return this.skipTutorial(); this.tutorial.index += 1; },
-        skipTutorial(){ this.tutorial.active=false; },
-        get tutorialCurrent(){ return this.tutorial.steps[this.tutorial.index] || null; },
-        isTutorialTarget(id){ return this.tutorial.active && this.tutorialCurrent?.target===id; },
-        tutorialStyle(){
-          const targetId=this.tutorialCurrent?.target; const el = targetId ? document.getElementById(targetId) : null;
-          if(!el) return 'top:20px;left:20px;';
-          const r = el.getBoundingClientRect();
-          const top = Math.max(12, r.bottom + 10);
-          const left = Math.min(window.innerWidth - 300, Math.max(12, r.left));
-          return `top:${top}px;left:${left}px;`;
-        }
-      }
-    }
-  </script>
-</body>
-</html>
+diff --git a/index.html b/index.html
+index 5da57c4f444781837a689e056763ffd230b18556..c788eb8faa6cefb587e3d9001049a21588ca5a7f 100644
+--- a/index.html
++++ b/index.html
+@@ -1,225 +1,42 @@
+ <!DOCTYPE html>
+ <html lang="fr">
+ <head>
+-<meta charset="UTF-8">
+-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+-
+-<title>iTravel Stable</title>
+-
+-<script src="https://cdn.tailwindcss.com"></script>
+-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+-
+-<style>
+-body { margin:0; font-family:-apple-system; }
+-#map { height:100vh; }
+-.panel {
+-    background: rgba(255,255,255,0.9);
+-    backdrop-filter: blur(20px);
+-}
+-</style>
++  <meta charset="UTF-8" />
++  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++  <title>iTravel · Mes voyages</title>
++  <link rel="icon" type="image/png" href="favicon.png" />
++  <link rel="stylesheet" href="assets/styles.css" />
+ </head>
+-
+-<body x-data="app()" x-init="init()">
+-
+-<div id="map"></div>
+-
+-<!-- SEARCH -->
+-<div class="absolute top-4 left-0 right-0 px-4 z-50">
+-<div class="panel rounded-xl p-3 max-w-md mx-auto">
+-
+-<input x-model="search" @input.debounce.400ms="searchPlaces()"
+-placeholder="Rechercher un lieu"
+-class="w-full outline-none text-lg"/>
+-
+-<div x-show="results.length" class="mt-2 max-h-40 overflow-auto">
+-<template x-for="r in results">
+-<div @click="addPlace(r)" class="p-2 hover:bg-gray-100 cursor-pointer text-sm">
+-<span x-text="r.display_name"></span>
+-</div>
+-</template>
+-</div>
+-
+-</div>
+-</div>
+-
+-<!-- PANEL -->
+-<div class="absolute bottom-0 left-0 right-0 panel p-4 max-h-[60vh] overflow-auto">
+-
+-<h2 class="font-bold text-lg">Carnet</h2>
+-
+-<template x-for="(s,i) in stops">
+-<div class="flex justify-between mt-2 bg-white p-2 rounded">
+-
+-<div>
+-<p x-text="s.name"></p>
+-<p class="text-xs text-gray-500" x-text="s.weather"></p>
+-</div>
+-
+-<button @click="remove(i)">X</button>
+-
+-</div>
+-</template>
+-
+-<button x-show="stops.length>1" @click="route()"
+-class="w-full mt-3 bg-blue-600 text-white p-2 rounded">
+-Tracer itinéraire
+-</button>
+-
+-</div>
+-
+-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+-
+-<script>
+-function app(){
+-return {
+-
+-map:null,
+-search:'',
+-results:[],
+-stops:[],
+-markers:[],
+-poly:null,
+-
+-init(){
+-
+-this.map = L.map('map').setView([50.85,4.35],6);
+-
+-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+-.addTo(this.map);
+-
+-// load safe
+-try {
+-this.stops = JSON.parse(localStorage.getItem('stops')) || [];
+-} catch {
+-this.stops = [];
+-}
+-
+-// restore markers
+-this.stops.forEach(s=>{
+-this.addMarker(s.lat,s.lng);
+-});
+-
+-},
+-
+-async searchPlaces(){
+-
+-if(this.search.length < 3){
+-this.results = [];
+-return;
+-}
+-
+-try {
+-let r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(this.search)}`);
+-let data = await r.json();
+-
+-this.results = data.slice(0,5);
+-} catch {
+-this.results = [];
+-}
+-
+-},
+-
+-async addPlace(p){
+-
+-if(!p.lat || !p.lon) return;
+-
+-let lat = parseFloat(p.lat);
+-let lng = parseFloat(p.lon);
+-
+-let weatherText = '';
+-
+-try {
+-let w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`);
+-let data = await w.json();
+-
+-if(data.current_weather){
+-weatherText = Math.round(data.current_weather.temperature) + "°C";
+-}
+-} catch {
+-weatherText = '';
+-}
+-
+-let stop = {
+-name: p.display_name,
+-lat,
+-lng,
+-weather: weatherText
+-};
+-
+-this.stops.push(stop);
+-this.save();
+-
+-this.addMarker(lat,lng);
+-
+-this.map.flyTo([lat,lng],12);
+-
+-this.results = [];
+-this.search = '';
+-
+-},
+-
+-addMarker(lat,lng){
+-let marker = L.marker([lat,lng]).addTo(this.map);
+-this.markers.push(marker);
+-},
+-
+-remove(i){
+-
+-this.stops.splice(i,1);
+-this.save();
+-
+-// reset map
+-this.markers.forEach(m=>this.map.removeLayer(m));
+-this.markers = [];
+-
+-this.stops.forEach(s=>{
+-this.addMarker(s.lat,s.lng);
+-});
+-
+-if(this.poly){
+-this.map.removeLayer(this.poly);
+-this.poly = null;
+-}
+-
+-},
+-
+-save(){
+-localStorage.setItem('stops', JSON.stringify(this.stops));
+-},
+-
+-async route(){
+-
+-if(this.stops.length < 2) return;
+-
+-if(this.poly){
+-this.map.removeLayer(this.poly);
+-}
+-
+-try {
+-
+-let coords = this.stops.map(s=>`${s.lng},${s.lat}`).join(';');
+-
+-let r = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
+-let data = await r.json();
+-
+-if(!data.routes || !data.routes[0]) return;
+-
+-let latlngs = data.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
+-
+-this.poly = L.polyline(latlngs,{weight:5}).addTo(this.map);
+-
+-this.map.fitBounds(this.poly.getBounds());
+-
+-} catch {
+-console.log("route error");
+-}
+-
+-}
+-
+-}
+-}
+-</script>
+-
++<body>
++  <header class="apple-bar">
++    <div class="apple-bar-inner">
++      <div class="brand"><span class="brand-dot"></span><span>iTravel</span></div>
++      <nav class="nav-links">
++        <a href="index.html">Mes voyages</a>
++        <a href="trip.html">Planificateur</a>
++      </nav>
++    </div>
++  </header>
++
++  <main class="app-shell">
++    <section class="card" style="padding:22px;">
++      <h1 class="section-title">Organise tes voyages</h1>
++      <p class="subtitle">Crée un voyage, ouvre une page dédiée, puis configure ton trajet réel.</p>
++
++      <div class="grid" style="grid-template-columns:2fr 1fr; margin-top:16px; gap:12px;">
++        <input id="trip-name" class="input" placeholder="Ex: Week-end à Lyon" />
++        <button id="trip-create" class="btn btn-primary">Créer le voyage</button>
++      </div>
++    </section>
++
++    <section class="card" style="padding:22px; margin-top:16px;">
++      <h2 style="margin:0; font-size:22px;">Mes voyages sauvegardés</h2>
++      <p class="subtitle">Chaque voyage ouvre une page séparée avec son planning et sa carte.</p>
++      <div id="trip-list" class="grid grid-3" style="margin-top:12px;"></div>
++      <p id="trip-empty" class="muted" style="margin-top:12px;">Aucun voyage pour l’instant.</p>
++    </section>
++  </main>
++
++  <script src="assets/app-index.js"></script>
+ </body>
+ </html>
