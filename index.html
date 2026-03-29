@@ -1,225 +1,266 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>iTravel Stable</title>
-
-<script src="https://cdn.tailwindcss.com"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-
-<style>
-body { margin:0; font-family:-apple-system; }
-#map { height:100vh; }
-.panel {
-    background: rgba(255,255,255,0.9);
-    backdrop-filter: blur(20px);
-}
-</style>
-</head>
-
-<body x-data="app()" x-init="init()">
-
-<div id="map"></div>
-
-<!-- SEARCH -->
-<div class="absolute top-4 left-0 right-0 px-4 z-50">
-<div class="panel rounded-xl p-3 max-w-md mx-auto">
-
-<input x-model="search" @input.debounce.400ms="searchPlaces()"
-placeholder="Rechercher un lieu"
-class="w-full outline-none text-lg"/>
-
-<div x-show="results.length" class="mt-2 max-h-40 overflow-auto">
-<template x-for="r in results">
-<div @click="addPlace(r)" class="p-2 hover:bg-gray-100 cursor-pointer text-sm">
-<span x-text="r.display_name"></span>
-</div>
-</template>
-</div>
-
-</div>
-</div>
-
-<!-- PANEL -->
-<div class="absolute bottom-0 left-0 right-0 panel p-4 max-h-[60vh] overflow-auto">
-
-<h2 class="font-bold text-lg">Carnet</h2>
-
-<template x-for="(s,i) in stops">
-<div class="flex justify-between mt-2 bg-white p-2 rounded">
-
-<div>
-<p x-text="s.name"></p>
-<p class="text-xs text-gray-500" x-text="s.weather"></p>
-</div>
-
-<button @click="remove(i)">X</button>
-
-</div>
-</template>
-
-<button x-show="stops.length>1" @click="route()"
-class="w-full mt-3 bg-blue-600 text-white p-2 rounded">
-Tracer itinéraire
-</button>
-
-</div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<script>
-function app(){
-return {
-
-map:null,
-search:'',
-results:[],
-stops:[],
-markers:[],
-poly:null,
-
-init(){
-
-this.map = L.map('map').setView([50.85,4.35],6);
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
-.addTo(this.map);
-
-// load safe
-try {
-this.stops = JSON.parse(localStorage.getItem('stops')) || [];
-} catch {
-this.stops = [];
-}
-
-// restore markers
-this.stops.forEach(s=>{
-this.addMarker(s.lat,s.lng);
-});
-
-},
-
-async searchPlaces(){
-
-if(this.search.length < 3){
-this.results = [];
-return;
-}
-
-try {
-let r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(this.search)}`);
-let data = await r.json();
-
-this.results = data.slice(0,5);
-} catch {
-this.results = [];
-}
-
-},
-
-async addPlace(p){
-
-if(!p.lat || !p.lon) return;
-
-let lat = parseFloat(p.lat);
-let lng = parseFloat(p.lon);
-
-let weatherText = '';
-
-try {
-let w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`);
-let data = await w.json();
-
-if(data.current_weather){
-weatherText = Math.round(data.current_weather.temperature) + "°C";
-}
-} catch {
-weatherText = '';
-}
-
-let stop = {
-name: p.display_name,
-lat,
-lng,
-weather: weatherText
-};
-
-this.stops.push(stop);
-this.save();
-
-this.addMarker(lat,lng);
-
-this.map.flyTo([lat,lng],12);
-
-this.results = [];
-this.search = '';
-
-},
-
-addMarker(lat,lng){
-let marker = L.marker([lat,lng]).addTo(this.map);
-this.markers.push(marker);
-},
-
-remove(i){
-
-this.stops.splice(i,1);
-this.save();
-
-// reset map
-this.markers.forEach(m=>this.map.removeLayer(m));
-this.markers = [];
-
-this.stops.forEach(s=>{
-this.addMarker(s.lat,s.lng);
-});
-
-if(this.poly){
-this.map.removeLayer(this.poly);
-this.poly = null;
-}
-
-},
-
-save(){
-localStorage.setItem('stops', JSON.stringify(this.stops));
-},
-
-async route(){
-
-if(this.stops.length < 2) return;
-
-if(this.poly){
-this.map.removeLayer(this.poly);
-}
-
-try {
-
-let coords = this.stops.map(s=>`${s.lng},${s.lat}`).join(';');
-
-let r = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
-let data = await r.json();
-
-if(!data.routes || !data.routes[0]) return;
-
-let latlngs = data.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
-
-this.poly = L.polyline(latlngs,{weight:5}).addTo(this.map);
-
-this.map.fitBounds(this.poly.getBounds());
-
-} catch {
-console.log("route error");
-}
-
-}
-
-}
-}
-</script>
-
-</body>
-</html>
+diff --git a/index.html b/index.html
+index 5da57c4f444781837a689e056763ffd230b18556..c788eb8faa6cefb587e3d9001049a21588ca5a7f 100644
+--- a/index.html
++++ b/index.html
+@@ -1,225 +1,42 @@
+ <!DOCTYPE html>
+ <html lang="fr">
+ <head>
+-<meta charset="UTF-8">
+-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+-
+-<title>iTravel Stable</title>
+-
+-<script src="https://cdn.tailwindcss.com"></script>
+-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+-
+-<style>
+-body { margin:0; font-family:-apple-system; }
+-#map { height:100vh; }
+-.panel {
+-    background: rgba(255,255,255,0.9);
+-    backdrop-filter: blur(20px);
+-}
+-</style>
++  <meta charset="UTF-8" />
++  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++  <title>iTravel · Mes voyages</title>
++  <link rel="icon" type="image/png" href="favicon.png" />
++  <link rel="stylesheet" href="assets/styles.css" />
+ </head>
+-
+-<body x-data="app()" x-init="init()">
+-
+-<div id="map"></div>
+-
+-<!-- SEARCH -->
+-<div class="absolute top-4 left-0 right-0 px-4 z-50">
+-<div class="panel rounded-xl p-3 max-w-md mx-auto">
+-
+-<input x-model="search" @input.debounce.400ms="searchPlaces()"
+-placeholder="Rechercher un lieu"
+-class="w-full outline-none text-lg"/>
+-
+-<div x-show="results.length" class="mt-2 max-h-40 overflow-auto">
+-<template x-for="r in results">
+-<div @click="addPlace(r)" class="p-2 hover:bg-gray-100 cursor-pointer text-sm">
+-<span x-text="r.display_name"></span>
+-</div>
+-</template>
+-</div>
+-
+-</div>
+-</div>
+-
+-<!-- PANEL -->
+-<div class="absolute bottom-0 left-0 right-0 panel p-4 max-h-[60vh] overflow-auto">
+-
+-<h2 class="font-bold text-lg">Carnet</h2>
+-
+-<template x-for="(s,i) in stops">
+-<div class="flex justify-between mt-2 bg-white p-2 rounded">
+-
+-<div>
+-<p x-text="s.name"></p>
+-<p class="text-xs text-gray-500" x-text="s.weather"></p>
+-</div>
+-
+-<button @click="remove(i)">X</button>
+-
+-</div>
+-</template>
+-
+-<button x-show="stops.length>1" @click="route()"
+-class="w-full mt-3 bg-blue-600 text-white p-2 rounded">
+-Tracer itinéraire
+-</button>
+-
+-</div>
+-
+-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+-
+-<script>
+-function app(){
+-return {
+-
+-map:null,
+-search:'',
+-results:[],
+-stops:[],
+-markers:[],
+-poly:null,
+-
+-init(){
+-
+-this.map = L.map('map').setView([50.85,4.35],6);
+-
+-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+-.addTo(this.map);
+-
+-// load safe
+-try {
+-this.stops = JSON.parse(localStorage.getItem('stops')) || [];
+-} catch {
+-this.stops = [];
+-}
+-
+-// restore markers
+-this.stops.forEach(s=>{
+-this.addMarker(s.lat,s.lng);
+-});
+-
+-},
+-
+-async searchPlaces(){
+-
+-if(this.search.length < 3){
+-this.results = [];
+-return;
+-}
+-
+-try {
+-let r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(this.search)}`);
+-let data = await r.json();
+-
+-this.results = data.slice(0,5);
+-} catch {
+-this.results = [];
+-}
+-
+-},
+-
+-async addPlace(p){
+-
+-if(!p.lat || !p.lon) return;
+-
+-let lat = parseFloat(p.lat);
+-let lng = parseFloat(p.lon);
+-
+-let weatherText = '';
+-
+-try {
+-let w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`);
+-let data = await w.json();
+-
+-if(data.current_weather){
+-weatherText = Math.round(data.current_weather.temperature) + "°C";
+-}
+-} catch {
+-weatherText = '';
+-}
+-
+-let stop = {
+-name: p.display_name,
+-lat,
+-lng,
+-weather: weatherText
+-};
+-
+-this.stops.push(stop);
+-this.save();
+-
+-this.addMarker(lat,lng);
+-
+-this.map.flyTo([lat,lng],12);
+-
+-this.results = [];
+-this.search = '';
+-
+-},
+-
+-addMarker(lat,lng){
+-let marker = L.marker([lat,lng]).addTo(this.map);
+-this.markers.push(marker);
+-},
+-
+-remove(i){
+-
+-this.stops.splice(i,1);
+-this.save();
+-
+-// reset map
+-this.markers.forEach(m=>this.map.removeLayer(m));
+-this.markers = [];
+-
+-this.stops.forEach(s=>{
+-this.addMarker(s.lat,s.lng);
+-});
+-
+-if(this.poly){
+-this.map.removeLayer(this.poly);
+-this.poly = null;
+-}
+-
+-},
+-
+-save(){
+-localStorage.setItem('stops', JSON.stringify(this.stops));
+-},
+-
+-async route(){
+-
+-if(this.stops.length < 2) return;
+-
+-if(this.poly){
+-this.map.removeLayer(this.poly);
+-}
+-
+-try {
+-
+-let coords = this.stops.map(s=>`${s.lng},${s.lat}`).join(';');
+-
+-let r = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
+-let data = await r.json();
+-
+-if(!data.routes || !data.routes[0]) return;
+-
+-let latlngs = data.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
+-
+-this.poly = L.polyline(latlngs,{weight:5}).addTo(this.map);
+-
+-this.map.fitBounds(this.poly.getBounds());
+-
+-} catch {
+-console.log("route error");
+-}
+-
+-}
+-
+-}
+-}
+-</script>
+-
++<body>
++  <header class="apple-bar">
++    <div class="apple-bar-inner">
++      <div class="brand"><span class="brand-dot"></span><span>iTravel</span></div>
++      <nav class="nav-links">
++        <a href="index.html">Mes voyages</a>
++        <a href="trip.html">Planificateur</a>
++      </nav>
++    </div>
++  </header>
++
++  <main class="app-shell">
++    <section class="card" style="padding:22px;">
++      <h1 class="section-title">Organise tes voyages</h1>
++      <p class="subtitle">Crée un voyage, ouvre une page dédiée, puis configure ton trajet réel.</p>
++
++      <div class="grid" style="grid-template-columns:2fr 1fr; margin-top:16px; gap:12px;">
++        <input id="trip-name" class="input" placeholder="Ex: Week-end à Lyon" />
++        <button id="trip-create" class="btn btn-primary">Créer le voyage</button>
++      </div>
++    </section>
++
++    <section class="card" style="padding:22px; margin-top:16px;">
++      <h2 style="margin:0; font-size:22px;">Mes voyages sauvegardés</h2>
++      <p class="subtitle">Chaque voyage ouvre une page séparée avec son planning et sa carte.</p>
++      <div id="trip-list" class="grid grid-3" style="margin-top:12px;"></div>
++      <p id="trip-empty" class="muted" style="margin-top:12px;">Aucun voyage pour l’instant.</p>
++    </section>
++  </main>
++
++  <script src="assets/app-index.js"></script>
+ </body>
+ </html>
