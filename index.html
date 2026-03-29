@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>iTravel Pro</title>
 
 <script src="https://cdn.tailwindcss.com"></script>
@@ -10,24 +11,16 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin:0; overflow:hidden;}
-#map { height:100vh; width:100vw;}
+body { margin:0; font-family:-apple-system; background:#fff;}
+#map { height:100vh; }
 
-.apple-blur {
-    background: rgba(255,255,255,0.8);
+.blur {
+    background: rgba(255,255,255,0.85);
     backdrop-filter: blur(20px);
 }
 
 button { transition:0.15s; }
-button:active { transform:scale(0.92); }
-
-.chip {
-    background:#f2f2f7;
-    padding:6px 12px;
-    border-radius:999px;
-    font-size:13px;
-    white-space:nowrap;
-}
+button:active { transform:scale(0.95); }
 </style>
 </head>
 
@@ -35,25 +28,25 @@ button:active { transform:scale(0.92); }
 
 <div id="map"></div>
 
-<!-- SEARCH -->
-<div class="absolute top-6 left-0 right-0 px-4 z-50">
-<div class="max-w-md mx-auto apple-blur rounded-2xl p-3 shadow">
+<!-- TOP SEARCH -->
+<div class="absolute top-4 left-0 right-0 px-4 z-50">
+<div class="blur rounded-2xl p-3 shadow max-w-md mx-auto">
 
 <input x-model="search" @input.debounce.300ms="searchPlaces()"
-placeholder="Rechercher un lieu..."
+placeholder="Rechercher..."
 class="w-full bg-transparent outline-none text-lg"/>
 
-<div class="flex gap-2 mt-3 overflow-x-auto">
-<button class="chip" @click="quickSearch('restaurant')">🍔</button>
-<button class="chip" @click="quickSearch('hotel')">🏨</button>
-<button class="chip" @click="quickSearch('museum')">🏛️</button>
-<button class="chip" @click="quickSearch('park')">🌳</button>
+<div class="flex gap-2 mt-2 overflow-x-auto text-sm">
+<button @click="quick('restaurant')" class="px-3 py-1 bg-gray-100 rounded-full">Restaurants</button>
+<button @click="quick('hotel')" class="px-3 py-1 bg-gray-100 rounded-full">Hôtels</button>
+<button @click="quick('museum')" class="px-3 py-1 bg-gray-100 rounded-full">Musées</button>
+<button @click="quick('supermarket')" class="px-3 py-1 bg-gray-100 rounded-full">Courses</button>
 </div>
 
-<div x-show="results.length" class="mt-3">
+<div x-show="results.length" class="mt-2">
 <template x-for="r in results">
-<div @click="selectPlace(r)" class="p-2 hover:bg-gray-100 rounded cursor-pointer">
-<span x-text="r.properties.name"></span>
+<div @click="addPlace(r)" class="p-2 hover:bg-gray-100 rounded cursor-pointer">
+<span x-text="r.display_name"></span>
 </div>
 </template>
 </div>
@@ -62,24 +55,23 @@ class="w-full bg-transparent outline-none text-lg"/>
 </div>
 
 <!-- PANEL -->
-<div class="absolute bottom-0 left-0 right-0 apple-blur rounded-t-3xl p-5 max-h-[70vh] overflow-auto">
+<div class="absolute bottom-0 left-0 right-0 blur rounded-t-3xl p-4 max-h-[75vh] overflow-auto">
 
 <h2 class="text-xl font-bold">Carnet</h2>
 
-<p class="text-sm text-gray-500">
-<span x-text="stops.length"></span> lieux
-</p>
-
-<!-- LIST -->
+<!-- STOPS -->
 <template x-for="(s,i) in stops">
-<div class="flex justify-between items-center mt-3 bg-white p-3 rounded-xl shadow">
+<div class="mt-3 p-3 bg-white rounded-xl shadow flex justify-between">
 
 <div>
 <p class="font-semibold" x-text="s.name"></p>
-<p class="text-xs text-gray-500" x-text="s.weather"></p>
+<p class="text-xs text-gray-500">
+<span x-text="s.weather"></span> •
+<span x-text="s.time"></span>
+</p>
 </div>
 
-<button @click="remove(i)">❌</button>
+<button @click="remove(i)">Supprimer</button>
 
 </div>
 </template>
@@ -88,16 +80,43 @@ class="w-full bg-transparent outline-none text-lg"/>
 <button x-show="stops.length>1"
 @click="route()"
 class="w-full mt-4 bg-blue-600 text-white p-3 rounded-xl">
-Tracer itinéraire
+Calculer itinéraire
 </button>
+
+<!-- EXPENSES -->
+<div class="mt-6">
+<h3 class="font-bold">Portefeuille</h3>
+
+<div class="flex gap-2 mt-2">
+<input x-model="expenseName" placeholder="Nom" class="border p-2 rounded w-1/2">
+<input x-model="expenseAmount" placeholder="€" type="number" class="border p-2 rounded w-1/2">
+</div>
+
+<button @click="addExpense()" class="mt-2 bg-black text-white px-3 py-2 rounded">
+Ajouter
+</button>
+
+<template x-for="e in expenses">
+<div class="flex justify-between text-sm mt-2">
+<span x-text="e.name"></span>
+<span x-text="e.amount + '€'"></span>
+</div>
+</template>
+
+<p class="font-bold mt-2">
+Total : <span x-text="totalExpenses()"></span> €
+</p>
+</div>
 
 <!-- NOTES -->
 <textarea x-model="notes"
-placeholder="Notes de voyage..."
+placeholder="Notes..."
 class="w-full mt-4 p-3 bg-gray-100 rounded-xl"></textarea>
 
-<!-- INSIGHT -->
-<p class="text-xs text-gray-500 mt-3" x-text="insight()"></p>
+<!-- NOTIFICATION -->
+<button @click="scheduleNotif()" class="mt-3 w-full bg-green-600 text-white p-2 rounded">
+Créer rappel (1 min)
+</button>
 
 </div>
 
@@ -111,19 +130,24 @@ map:null,
 search:'',
 results:[],
 stops:[],
-notes:'',
 poly:null,
+
+expenses:[],
+expenseName:'',
+expenseAmount:'',
+
+notes:'',
 
 init(){
 
-this.map = L.map('map',{zoomControl:false})
-.setView([50.85,4.35],6);
+this.map = L.map('map').setView([50.85,4.35],6);
 
-L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png')
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
 .addTo(this.map);
 
-// load saved
+// load
 this.stops = JSON.parse(localStorage.getItem('stops')||'[]');
+this.expenses = JSON.parse(localStorage.getItem('expenses')||'[]');
 this.notes = localStorage.getItem('notes')||'';
 
 this.stops.forEach(s=>{
@@ -133,31 +157,33 @@ L.marker([s.lat,s.lng]).addTo(this.map);
 },
 
 async searchPlaces(){
+
 if(this.search.length<3){this.results=[];return;}
 
-let r = await fetch(`https://photon.komoot.io/api/?q=${this.search}`);
-let data = await r.json();
+let r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${this.search}`);
+this.results = await r.json();
 
-this.results = data.features.slice(0,5);
 },
 
-quickSearch(type){
-this.search = type;
+quick(q){
+this.search=q;
 this.searchPlaces();
 },
 
-async selectPlace(p){
+async addPlace(p){
 
-let [lng,lat]=p.geometry.coordinates;
+let lat = p.lat;
+let lng = p.lon;
 
 let weather = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`);
 let w = await weather.json();
 
 let stop = {
-name:p.properties.name,
+name:p.display_name,
 lat,
 lng,
-weather: Math.round(w.current_weather.temperature)+"°C"
+weather: Math.round(w.current_weather.temperature)+"°C",
+time:'--'
 };
 
 this.stops.push(stop);
@@ -187,18 +213,53 @@ let coords = this.stops.map(s=>`${s.lng},${s.lat}`).join(';');
 let r = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
 let data = await r.json();
 
-let latlngs = data.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
+let route = data.routes[0];
+
+let latlngs = route.geometry.coordinates.map(c=>[c[1],c[0]]);
 
 this.poly = L.polyline(latlngs,{weight:5}).addTo(this.map);
 
 this.map.fitBounds(this.poly.getBounds());
 
+// temps réel
+let total = route.duration;
+this.stops.forEach((s,i)=>{
+s.time = Math.round(total/60)+" min total";
+});
+
 },
 
-insight(){
-if(this.stops.length<2) return "";
-return "Astuce : regroupe les lieux proches pour gagner du temps.";
+addExpense(){
+if(!this.expenseName || !this.expenseAmount) return;
+
+this.expenses.push({
+name:this.expenseName,
+amount:parseFloat(this.expenseAmount)
+});
+
+localStorage.setItem('expenses',JSON.stringify(this.expenses));
+
+this.expenseName='';
+this.expenseAmount='';
+},
+
+totalExpenses(){
+return this.expenses.reduce((a,b)=>a+b.amount,0);
+},
+
+scheduleNotif(){
+
+if(Notification.permission !== "granted"){
+Notification.requestPermission();
 }
+
+setTimeout(()=>{
+new Notification("Départ",{
+body:"C'est l'heure de partir"
+});
+},60000);
+
+},
 
 }
 }
