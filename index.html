@@ -1,266 +1,208 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iTravel</title>
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,fill,GRAD@24,400,0,0" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iTravel Pro</title>
 
-    <style>
-        [x-cloak] { display: none !important; }
-        body { 
-            font-family: 'Plus Jakarta Sans', sans-serif; 
-            background: #ffffff; 
-            color: #1d1d1f;
-            overflow: hidden;
-        }
-        #map { height: 100vh; width: 100vw; z-index: 1; }
-        
-        .apple-sheet {
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: saturate(180%) blur(20px);
-            -webkit-backdrop-filter: saturate(180%) blur(20px);
-            border-top: 1px solid rgba(0,0,0,0.05);
-            transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
-        }
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
-        .search-container {
-            background: rgba(118, 118, 128, 0.12);
-            border-radius: 12px;
-            transition: all 0.2s;
-        }
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin:0; overflow:hidden;}
+#map { height:100vh; width:100vw;}
 
-        .search-container:focus-within {
-            background: rgba(118, 118, 128, 0.16);
-            ring: 2px solid #007AFF;
-        }
+.apple-blur {
+    background: rgba(255,255,255,0.8);
+    backdrop-filter: blur(20px);
+}
 
-        .btn-apple {
-            transition: all 0.2s;
-        }
-        .btn-apple:active {
-            transform: scale(0.95);
-            opacity: 0.8;
-        }
+button { transition:0.15s; }
+button:active { transform:scale(0.92); }
 
-        /* Masquer les contrôles Leaflet pour le look Apple */
-        .leaflet-control-container { display: none; }
-    </style>
+.chip {
+    background:#f2f2f7;
+    padding:6px 12px;
+    border-radius:999px;
+    font-size:13px;
+    white-space:nowrap;
+}
+</style>
 </head>
-<body x-data="itravelApp()" x-init="init()">
 
-    <div id="map" class="fixed inset-0"></div>
+<body x-data="app()" x-init="init()">
 
-    <div class="fixed top-12 left-0 right-0 z-[3000] px-4 pointer-events-none">
-        <div class="max-w-md mx-auto pointer-events-auto">
-            <div class="bg-white/90 backdrop-blur-xl rounded-2xl shadow-xl shadow-black/5 border border-black/5 p-2">
-                <div class="search-container flex items-center px-3 py-2.5">
-                    <span class="material-symbols-rounded text-gray-500 mr-2">search</span>
-                    <input 
-                        type="text" 
-                        x-model="search" 
-                        @input.debounce.300ms="getPlaces()"
-                        placeholder="Où voulez-vous aller ?" 
-                        class="bg-transparent border-none outline-none w-full text-[17px] placeholder-gray-500"
-                    >
-                    <button @click="locateMe()" class="text-blue-600 ml-2">
-                        <span class="material-symbols-rounded">my_location</span>
-                    </button>
-                </div>
+<div id="map"></div>
 
-                <div x-show="results.length > 0" x-cloak class="mt-2 border-t border-gray-100">
-                    <template x-for="r in results">
-                        <div @click="addStep(r)" class="py-3 px-2 hover:bg-gray-50 cursor-pointer flex items-center gap-3 border-b border-gray-50 last:border-0">
-                            <div class="w-9 h-9 bg-blue-500 rounded-full flex items-center justify-center text-white">
-                                <span class="material-symbols-rounded text-[20px]">location_on</span>
-                            </div>
-                            <div class="overflow-hidden">
-                                <p class="font-semibold text-[15px] truncate" x-text="r.properties.name"></p>
-                                <p class="text-[12px] text-gray-500 truncate" x-text="r.properties.country + (r.properties.city ? ', ' + r.properties.city : '')"></p>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </div>
-    </div>
+<!-- SEARCH -->
+<div class="absolute top-6 left-0 right-0 px-4 z-50">
+<div class="max-w-md mx-auto apple-blur rounded-2xl p-3 shadow">
 
-    <div 
-        class="fixed inset-x-0 bottom-0 z-[4000] apple-sheet shadow-2xl"
-        :style="sheetOpen ? 'height: 75vh;' : 'height: 120px;'"
-    >
-        <div @click="sheetOpen = !sheetOpen" class="w-full py-4 cursor-pointer">
-            <div class="w-10 h-1.5 bg-gray-300 rounded-full mx-auto"></div>
-        </div>
+<input x-model="search" @input.debounce.300ms="searchPlaces()"
+placeholder="Rechercher un lieu..."
+class="w-full bg-transparent outline-none text-lg"/>
 
-        <div class="px-6 h-full overflow-y-auto pb-32">
-            <div class="flex justify-between items-end mb-8">
-                <div>
-                    <h1 class="text-3xl font-extrabold tracking-tight">Carnet</h1>
-                    <p class="text-gray-500 font-medium" x-text="stops.length + ' destinations sélectionnées'"></p>
-                </div>
-                <button x-show="stops.length > 1" @click="calculateRoute()" class="btn-apple bg-blue-600 text-white px-5 py-2.5 rounded-full font-bold text-sm shadow-lg shadow-blue-500/30">
-                    Tracer la route
-                </button>
-            </div>
+<div class="flex gap-2 mt-3 overflow-x-auto">
+<button class="chip" @click="quickSearch('restaurant')">🍔</button>
+<button class="chip" @click="quickSearch('hotel')">🏨</button>
+<button class="chip" @click="quickSearch('museum')">🏛️</button>
+<button class="chip" @click="quickSearch('park')">🌳</button>
+</div>
 
-            <div class="space-y-4">
-                <template x-for="(s, i) in stops" :key="i">
-                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between group">
-                        <div class="flex items-center gap-4">
-                            <div class="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-blue-600 font-bold text-sm border border-gray-100" x-text="i+1"></div>
-                            <div>
-                                <p class="font-bold text-[16px]" x-text="s.name"></p>
-                                <div class="flex items-center gap-2 mt-0.5">
-                                    <span class="text-[11px] font-bold text-blue-500 uppercase tracking-wider" x-text="s.weather || 'Météo...'"></span>
-                                </div>
-                            </div>
-                        </div>
-                        <button @click="removeStep(i)" class="p-2 text-gray-300 hover:text-red-500 transition">
-                            <span class="material-symbols-rounded">do_not_disturb_on</span>
-                        </button>
-                    </div>
-                </template>
+<div x-show="results.length" class="mt-3">
+<template x-for="r in results">
+<div @click="selectPlace(r)" class="p-2 hover:bg-gray-100 rounded cursor-pointer">
+<span x-text="r.properties.name"></span>
+</div>
+</template>
+</div>
 
-                <div x-show="stops.length === 0" class="text-center py-12">
-                    <div class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <span class="material-symbols-rounded text-gray-300 text-3xl">map</span>
-                    </div>
-                    <p class="text-gray-400 font-medium">Commencez par ajouter un lieu.</p>
-                </div>
-            </div>
+</div>
+</div>
 
-            <div x-show="stops.length >= 2" class="mt-10 space-y-4">
-                <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Analyse intelligente</h3>
-                <div class="bg-blue-50 rounded-3xl p-6 border border-blue-100">
-                    <div class="flex items-center gap-3 mb-2 text-blue-700">
-                        <span class="material-symbols-rounded">train</span>
-                        <span class="font-bold">Option Rail</span>
-                    </div>
-                    <p class="text-sm text-blue-800 leading-relaxed">
-                        Ce trajet est éligible au réseau ferroviaire. L'IA estime une économie de <span class="font-bold">2h 45m</span> par rapport à la route.
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
+<!-- PANEL -->
+<div class="absolute bottom-0 left-0 right-0 apple-blur rounded-t-3xl p-5 max-h-[70vh] overflow-auto">
 
-    <nav class="fixed bottom-0 left-0 right-0 h-24 bg-white/80 backdrop-blur-2xl border-t border-gray-100 z-[5000] px-8 flex items-center justify-around pb-6">
-        <button @click="tab = 'explore'; sheetOpen = false" :class="tab === 'explore' ? 'text-blue-600' : 'text-gray-400'" class="flex flex-col items-center gap-1">
-            <span class="material-symbols-rounded" :style="tab === 'explore' ? 'font-variation-settings: \'FILL\' 1' : ''">explore</span>
-            <span class="text-[10px] font-bold">Explorer</span>
-        </button>
-        <button @click="tab = 'plan'; sheetOpen = true" :class="tab === 'plan' ? 'text-blue-600' : 'text-gray-400'" class="flex flex-col items-center gap-1">
-            <span class="material-symbols-rounded" :style="tab === 'plan' ? 'font-variation-settings: \'FILL\' 1' : ''">map</span>
-            <span class="text-[10px] font-bold">Carnet</span>
-        </button>
-        <button class="flex flex-col items-center gap-1 text-gray-400">
-            <span class="material-symbols-rounded">auto_awesome</span>
-            <span class="text-[10px] font-bold">IA Guide</span>
-        </button>
-        <button class="flex flex-col items-center gap-1 text-gray-400">
-            <span class="material-symbols-rounded">settings</span>
-            <span class="text-[10px] font-bold">Réglages</span>
-        </button>
-    </nav>
+<h2 class="text-xl font-bold">Carnet</h2>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        function itravelApp() {
-            return {
-                tab: 'explore',
-                sheetOpen: false,
-                search: '',
-                results: [],
-                stops: [],
-                map: null,
-                polyline: null,
+<p class="text-sm text-gray-500">
+<span x-text="stops.length"></span> lieux
+</p>
 
-                init() {
-                    // Carte claire Apple Style
-                    this.map = L.map('map', { zoomControl: false, attributionControl: false }).setView([46.6, 2.2], 6);
-                    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(this.map);
-                },
+<!-- LIST -->
+<template x-for="(s,i) in stops">
+<div class="flex justify-between items-center mt-3 bg-white p-3 rounded-xl shadow">
 
-                async getPlaces() {
-                    if(this.search.length < 3) { this.results = []; return; }
-                    const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(this.search)}&limit=5`);
-                    const data = await res.json();
-                    this.results = data.features;
-                },
+<div>
+<p class="font-semibold" x-text="s.name"></p>
+<p class="text-xs text-gray-500" x-text="s.weather"></p>
+</div>
 
-                async addStep(r) {
-                    const [lng, lat] = r.geometry.coordinates;
-                    const stop = { 
-                        name: r.properties.name, 
-                        lat, lng, 
-                        weather: '' 
-                    };
-                    
-                    // Fetch météo réelle
-                    const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`);
-                    const wData = await wRes.json();
-                    stop.weather = `${Math.round(wData.current_weather.temperature)}°C • ${this.getWeatherLabel(wData.current_weather.weathercode)}`;
+<button @click="remove(i)">❌</button>
 
-                    this.stops.push(stop);
-                    this.results = [];
-                    this.search = '';
-                    
-                    L.marker([lat, lng], {
-                        icon: L.divIcon({
-                            className: 'custom-pin',
-                            html: `<div style="background:#007AFF;width:14px;height:14px;border-radius:50%;border:3px solid white;box-shadow:0 2px 10px rgba(0,0,0,0.2)"></div>`
-                        })
-                    }).addTo(this.map);
+</div>
+</template>
 
-                    this.map.flyTo([lat, lng], 12);
-                },
+<!-- ROUTE -->
+<button x-show="stops.length>1"
+@click="route()"
+class="w-full mt-4 bg-blue-600 text-white p-3 rounded-xl">
+Tracer itinéraire
+</button>
 
-                async calculateRoute() {
-                    if (this.polyline) this.map.removeLayer(this.polyline);
-                    const coords = this.stops.map(s => `${s.lng},${s.lat}`).join(';');
-                    const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
-                    const data = await res.json();
-                    
-                    if(data.routes && data.routes[0]) {
-                        const geometry = data.routes[0].geometry;
-                        const latlngs = geometry.coordinates.map(c => [c[1], c[0]]);
-                        this.polyline = L.polyline(latlngs, {
-                            color: '#007AFF', 
-                            weight: 6, 
-                            opacity: 0.9,
-                            lineCap: 'round'
-                        }).addTo(this.map);
-                        this.map.fitBounds(this.polyline.getBounds(), { padding: [100, 100] });
-                    }
-                    this.sheetOpen = false;
-                },
+<!-- NOTES -->
+<textarea x-model="notes"
+placeholder="Notes de voyage..."
+class="w-full mt-4 p-3 bg-gray-100 rounded-xl"></textarea>
 
-                removeStep(index) {
-                    this.stops.splice(index, 1);
-                    this.calculateRoute();
-                },
+<!-- INSIGHT -->
+<p class="text-xs text-gray-500 mt-3" x-text="insight()"></p>
 
-                locateMe() {
-                    navigator.geolocation.getCurrentPosition(p => {
-                        this.addStep({ 
-                            properties: { name: "Ma Position", country: "Actuel" }, 
-                            geometry: { coordinates: [p.coords.longitude, p.coords.latitude] } 
-                        });
-                    });
-                },
+</div>
 
-                getWeatherLabel(code) {
-                    const codes = { 0: 'Ciel clair', 1: 'Peu nuageux', 2: 'Partiellement nuageux', 3: 'Couvert', 45: 'Brouillard', 51: 'Bruine', 61: 'Pluie légère', 71: 'Neige' };
-                    return codes[code] || 'Météo stable';
-                }
-            }
-        }
-    </script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+function app(){
+return {
+
+map:null,
+search:'',
+results:[],
+stops:[],
+notes:'',
+poly:null,
+
+init(){
+
+this.map = L.map('map',{zoomControl:false})
+.setView([50.85,4.35],6);
+
+L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png')
+.addTo(this.map);
+
+// load saved
+this.stops = JSON.parse(localStorage.getItem('stops')||'[]');
+this.notes = localStorage.getItem('notes')||'';
+
+this.stops.forEach(s=>{
+L.marker([s.lat,s.lng]).addTo(this.map);
+});
+
+},
+
+async searchPlaces(){
+if(this.search.length<3){this.results=[];return;}
+
+let r = await fetch(`https://photon.komoot.io/api/?q=${this.search}`);
+let data = await r.json();
+
+this.results = data.features.slice(0,5);
+},
+
+quickSearch(type){
+this.search = type;
+this.searchPlaces();
+},
+
+async selectPlace(p){
+
+let [lng,lat]=p.geometry.coordinates;
+
+let weather = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`);
+let w = await weather.json();
+
+let stop = {
+name:p.properties.name,
+lat,
+lng,
+weather: Math.round(w.current_weather.temperature)+"°C"
+};
+
+this.stops.push(stop);
+
+localStorage.setItem('stops',JSON.stringify(this.stops));
+
+L.marker([lat,lng]).addTo(this.map);
+
+this.map.flyTo([lat,lng],12);
+
+this.results=[];
+this.search='';
+
+},
+
+remove(i){
+this.stops.splice(i,1);
+localStorage.setItem('stops',JSON.stringify(this.stops));
+},
+
+async route(){
+
+if(this.poly) this.map.removeLayer(this.poly);
+
+let coords = this.stops.map(s=>`${s.lng},${s.lat}`).join(';');
+
+let r = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
+let data = await r.json();
+
+let latlngs = data.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
+
+this.poly = L.polyline(latlngs,{weight:5}).addTo(this.map);
+
+this.map.fitBounds(this.poly.getBounds());
+
+},
+
+insight(){
+if(this.stops.length<2) return "";
+return "Astuce : regroupe les lieux proches pour gagner du temps.";
+}
+
+}
+}
+</script>
+
 </body>
 </html>
